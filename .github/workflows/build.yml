@@ -12,8 +12,9 @@ jobs:
           xbps-install -Syu zig wget unzip
       - name: 'Download sqlite3 source'
         run: |
+          url=$(<url.txt)
           mkdir sqlite3
-          wget $(<url.txt) -O sqlite3.zip
+          wget $url -O sqlite3.zip
           unzip -d sqlite3 -j sqlite3.zip
       - name: 'Build sqlite3'
         run: |
