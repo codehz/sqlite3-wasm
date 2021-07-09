@@ -1,0 +1,34 @@
+name: build sqlite3
+on:
+  workflow_dispatch:
+    inputs:
+      additional_parameters:
+        description: 'Additional parameters'
+        required: true
+
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: voidlinux/voidlinux:latest
+    steps:
+      - name: 'Install dependencies'
+        run: |
+          xbps-install -Syu zig wget
+      - name: 'Download sqlite3 source'
+        run: |
+          mkdir sqlite3
+          wget https://sqlite.org/2021/sqlite-amalgamation-3360000.zip -o sqlite3.zip
+          unzip sqlite3.zip -d sqlite3 -j
+      - name: 'Build sqlite3'
+        run: |
+          cd sqlite3
+          zig build-obj -lc -target wasm32-wasi-musl sqlite3.c -O ReleaseSmall \
+            -o ../sqlite3.wasm \
+            -DSQLITE_THREADSAFE=0 \
+            -DSQLITE_OMIT_LOAD_EXTENSION
+      - name: 'Upload as artifact'
+        uses: actions/upload-artifact@v2
+        with:
+          name: sqlite3
+          path: ./sqlite3.wasm
