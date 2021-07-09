@@ -6,10 +6,10 @@ jobs:
     runs-on: ubuntu-latest
     container: voidlinux/voidlinux:latest
     steps:
-      - uses: actions/checkout@v2
       - name: 'Install dependencies'
         run: |
-          xbps-install -Syu zig wget unzip
+          xbps-install -Syu zig git wget unzip
+      - uses: actions/checkout@v2
       - name: 'Download sqlite3 source'
         run: |
           url=$(<url.txt)
