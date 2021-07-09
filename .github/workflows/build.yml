@@ -16,6 +16,7 @@ jobs:
           mkdir sqlite3
           wget $url -O sqlite3.zip
           unzip -d sqlite3 -j sqlite3.zip
+        shell: bash
       - name: 'Build sqlite3'
         run: |
           arguments=$(<arguments.txt)
@@ -23,6 +24,7 @@ jobs:
           zig build-obj -lc -target wasm32-wasi-musl sqlite3.c -O ReleaseSmall \
             -femit-bin=../sqlite3.wasm \
             $arguments
+        shell: bash
       - name: 'Upload as artifact'
         uses: actions/upload-artifact@v2
         with:
