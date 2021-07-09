@@ -8,7 +8,7 @@ jobs:
     steps:
       - name: 'Install dependencies'
         run: |
-          xbps-install -Syu zig git wget unzip
+          xbps-install -Syu zig git wget unzip bash
       - uses: actions/checkout@v2
       - name: 'Download sqlite3 source'
         run: |
