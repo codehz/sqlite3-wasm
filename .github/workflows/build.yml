@@ -1,32 +1,27 @@
 name: build sqlite3
-on:
-  workflow_dispatch:
-    inputs:
-      additional_parameters:
-        description: 'Additional parameters'
-        required: true
+on: [push]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     container: voidlinux/voidlinux:latest
     steps:
+      - uses: actions/checkout@v1
       - name: 'Install dependencies'
         run: |
           xbps-install -Syu zig wget unzip
       - name: 'Download sqlite3 source'
         run: |
           mkdir sqlite3
-          wget https://sqlite.org/2021/sqlite-amalgamation-3360000.zip -O sqlite3.zip
+          wget $(<url.txt) -O sqlite3.zip
           unzip -d sqlite3 -j sqlite3.zip
-      - name: 'Build sqlite3 with ${{ github.event.inputs.additional_parameters }}'
+      - name: 'Build sqlite3'
         run: |
+          arguments=$(<arguments.txt)
           cd sqlite3
           zig build-obj -lc -target wasm32-wasi-musl sqlite3.c -O ReleaseSmall \
             -femit-bin=../sqlite3.wasm \
-            -DSQLITE_THREADSAFE=0 \
-            -DSQLITE_OMIT_LOAD_EXTENSION \
-            ${{ github.event.inputs.additional_parameters }}
+            $arguments
       - name: 'Upload as artifact'
         uses: actions/upload-artifact@v2
         with:
