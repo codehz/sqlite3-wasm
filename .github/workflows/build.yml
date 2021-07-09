@@ -18,7 +18,7 @@ jobs:
         run: |
           mkdir sqlite3
           wget https://sqlite.org/2021/sqlite-amalgamation-3360000.zip -O sqlite3.zip
-          unzip sqlite3.zip -d sqlite3 -j
+          unzip -d sqlite3 -j sqlite3.zip
       - name: 'Build sqlite3 with ${{ github.event.inputs.additional_parameters }}'
         run: |
           cd sqlite3
