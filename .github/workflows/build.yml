@@ -6,7 +6,6 @@ on:
         description: 'Additional parameters'
         required: true
 
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,13 +19,14 @@ jobs:
           mkdir sqlite3
           wget https://sqlite.org/2021/sqlite-amalgamation-3360000.zip -o sqlite3.zip
           unzip sqlite3.zip -d sqlite3 -j
-      - name: 'Build sqlite3'
+      - name: 'Build sqlite3 with ${{ github.events.inputs.additional_parameters }}'
         run: |
           cd sqlite3
           zig build-obj -lc -target wasm32-wasi-musl sqlite3.c -O ReleaseSmall \
             -o ../sqlite3.wasm \
             -DSQLITE_THREADSAFE=0 \
-            -DSQLITE_OMIT_LOAD_EXTENSION
+            -DSQLITE_OMIT_LOAD_EXTENSION \
+            ${{ github.events.inputs.additional_parameters }}
       - name: 'Upload as artifact'
         uses: actions/upload-artifact@v2
         with:
