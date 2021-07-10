@@ -4,29 +4,22 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: voidlinux/voidlinux:latest
     steps:
-      - name: 'Install dependencies'
-        run: |
-          xbps-install -Syu zig git wget unzip bash
+      - uses: goto-bus-stop/setup-zig@v1
+        with:
+          version: 0.9.0-dev.440+7b8a968f1
       - uses: actions/checkout@v2
       - name: 'Download sqlite3 source'
         run: |
           url=$(<url.txt)
-          mkdir sqlite3
-          wget $url -O sqlite3.zip
-          unzip -d sqlite3 -j sqlite3.zip
+          wget $url -O /tmp/sqlite3.zip
+          unzip -d sqlite3 -j /tmp/sqlite3.zip
         shell: bash
       - name: 'Build sqlite3'
-        run: |
-          arguments=$(<arguments.txt)
-          cd sqlite3
-          zig build-obj -lc -target wasm32-wasi-musl sqlite3.c -O ReleaseSmall \
-            -femit-bin=../sqlite3.wasm \
-            $arguments
+        run: zig build
         shell: bash
       - name: 'Upload as artifact'
         uses: actions/upload-artifact@v2
         with:
           name: sqlite3
-          path: ./sqlite3.wasm
+          path: ./zig-out/lib/sqlite3.wasm
