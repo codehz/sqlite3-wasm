@@ -16,14 +16,12 @@ pub fn build(b: *std.build.Builder) void {
 
     const envlib = b.addObject("env", "src/main.zig");
     envlib.strip = true;
-    envlib.want_lto = true;
     envlib.setBuildMode(mode);
     envlib.setTarget(target);
 
     const lib = b.addSharedLibrary("sqlite3", null, .unversioned);
     setArguments(lib, @embedFile("arguments.txt"));
     lib.strip = true;
-    lib.want_lto = true;
     lib.linkLibC();
     lib.addObject(envlib);
     lib.addCSourceFile("sqlite3/sqlite3.c", &.{});
