@@ -45,6 +45,10 @@ function resetErrno() {
   u32slice(sqlite3.helper_errno.value, 1)[0] = 0;
 }
 
+function swap() {
+  return u32slice(sqlite3.helper_swap.value, 32);
+}
+
 export class SqliteError extends Error {
   constructor(code: number, message?: string) {
     const msg = message ?? str(sqlite3.sqlite3_errstr(code));
@@ -81,13 +85,97 @@ export class DB {
     this.prepare(sql, false).excute(param).destroy();
   }
 
+  session(name = "main") {
+    const sess = stringHelper(
+      name,
+      (name) => sqlite3.helper_session_create(this.#handle, name),
+    );
+    throwIfError();
+    return new Session(sess);
+  }
+
   destroy() {
     sqlite3.sqlite3_close(this.#handle);
   }
 }
 
-export type Value = number | string | Uint8Array | null;
-export type Parameter = Record<string, Value> | Value[];
+export type RawValue = number | string | Uint8Array | null;
+
+export class Value {
+  #handle: number;
+  #type: number;
+  constructor(handle: number) {
+    this.#handle = handle;
+    this.#type = sqlite3.sqlite3_value_type(handle);
+  }
+
+  get() {
+    switch (this.#type) {
+      case 1:
+      case 2:
+        return sqlite3.sqlite3_value_double(this.#handle);
+      case 3: {
+        const length = sqlite3.sqlite3_value_bytes(this.#handle);
+        return str(sqlite3.sqlite3_value_text(this.#handle), length);
+      }
+      case 4: {
+        const length = sqlite3.sqlite3_value_bytes(this.#handle);
+        return u8slice(sqlite3.sqlite3_value_text(this.#handle), length);
+      }
+      case 5:
+        return null;
+      default:
+        throw new TypeError(`invalid datetype: ${this.#type}`);
+    }
+  }
+
+  clone() {
+    return new Value(sqlite3.sqlite3_value_dup(this.#handle));
+  }
+
+  destroy() {
+    sqlite3.sqlite3_value_free(this.#handle);
+  }
+}
+
+export class Session {
+  #handle: number;
+  constructor(handle: number) {
+    this.#handle = handle;
+  }
+
+  attach(other?: string) {
+    throwIfError(
+      other
+        ? stringHelper(
+          other,
+          (other) => sqlite3.sqlite3session_attach(this.#handle, other),
+        )
+        : sqlite3.sqlite3session_attach(this.#handle, 0),
+    );
+    return this;
+  }
+
+  changeset() {
+    const addr = sqlite3.helper_session_changeset(this.#handle);
+    throwIfError();
+    const len = swap()[0];
+    return u8slice(addr, len);
+  }
+
+  patchset() {
+    const addr = sqlite3.helper_session_patchset(this.#handle);
+    throwIfError();
+    const len = swap()[0];
+    return u8slice(addr, len);
+  }
+
+  destroy() {
+    sqlite3.sqlite3session_delete(this.#handle);
+  }
+}
+
+export type Parameter = Record<string, RawValue> | RawValue[];
 
 export class Statement {
   #handle: number;
@@ -114,7 +202,7 @@ export class Statement {
 
   bind(
     idxOrName: number | string,
-    value: Value,
+    value: RawValue,
   ): void {
     const idx = typeof idxOrName == "number"
       ? idxOrName
@@ -141,7 +229,7 @@ export class Statement {
     }
   }
 
-  get(idx: number): Value {
+  get(idx: number): RawValue {
     if (idx < 0 && idx >= this.#results.length) {
       throw new RangeError("column out of range");
     }
@@ -165,10 +253,10 @@ export class Statement {
     }
   }
 
-  getObject(): Record<string | number, Value> {
-    const ret: Record<string | number, Value> = [] as unknown as Record<
+  getObject(): Record<string | number, RawValue> {
+    const ret: Record<string | number, RawValue> = [] as unknown as Record<
       string | number,
-      Value
+      RawValue
     >;
     for (let i = 0; i < this.#results.length; i++) {
       const value = this.get(i);
@@ -190,7 +278,7 @@ export class Statement {
     }
   }
 
-  *query(obj: Parameter = {}): Iterable<Record<string | number, Value>> {
+  *query(obj: Parameter = {}): Iterable<Record<string | number, RawValue>> {
     try {
       this.bindAll(obj);
       while (true) {

@@ -85,11 +85,20 @@ const mod = await WebAssembly.instantiate(file, {
     fs_truncate: vfs.truncate,
     fs_filesize: vfs.filesize,
   },
+  session: {
+    session_filter(ctx: number, name: number): number {
+      return 0;
+    },
+    session_conflict(ctx: number, kind: number, iter: number): number {
+      return 0;
+    }
+  }
 });
 
 interface SQLite3Library {
   memory: WebAssembly.Memory;
   helper_errno: WebAssembly.Global;
+  helper_swap: WebAssembly.Global;
   malloc(size: number): number;
   free(ptr: number): void;
   realloc(ptr: number, size: number): number;
@@ -123,6 +132,31 @@ interface SQLite3Library {
   sqlite3_column_blob(stmt: number, idx: number): number;
   sqlite3_reset(stmt: number): number;
   sqlite3_clear_bindings(stmt: number): number;
+  sqlite3_value_blob(value: number): number;
+  sqlite3_value_double(value: number): number;
+  sqlite3_value_text(value: number): number;
+  sqlite3_value_bytes(value: number): number;
+  sqlite3_value_type(value: number): number;
+  sqlite3_value_dup(value: number): number;
+  sqlite3_value_free(value: number): void;
+  helper_session_create(db: number, name: number): number;
+  sqlite3session_delete(session: number): void;
+  sqlite3session_attach(session: number, name: number): number;
+  helper_session_changeset(session: number): number;
+  helper_session_patchset(session: number): number;
+  helper_changeset_start(buffer: number, length: number): number;
+  sqlite3changeset_next(iterator: number): number;
+  helper_changeset_op(iterator: number): number;
+  helper_changeset_new(iterator: number, column: number): number;
+  helper_changeset_old(iterator: number, column: number): number;
+  sqlite3changeset_finalize(iterator: number): number;
+  helper_changeset_apply(
+    db: number,
+    buffer: number,
+    length: number,
+    ctx: number,
+  ): number;
+  helper_changeset_conflict(iterator: number, column: number): number;
 }
 
 export default exports();
