@@ -123,13 +123,9 @@ interface SQLite3Library {
   helper_bind_text(stmt: number, idx: number, data: number, len: number): void;
   sqlite3_bind_double(stmt: number, idx: number, value: number): number;
   sqlite3_bind_null(stmt: number, idx: number): number;
-  sqlite3_column_type(stmt: number, idx: number): number;
-  sqlite3_column_count(stmt: number): number;
+  sqlite3_column_value(stmt: number, idx: number): number;
   sqlite3_column_name(stmt: number, idx: number): number;
-  sqlite3_column_double(stmt: number, idx: number): number;
-  sqlite3_column_bytes(stmt: number, idx: number): number;
-  sqlite3_column_text(stmt: number, idx: number): number;
-  sqlite3_column_blob(stmt: number, idx: number): number;
+  sqlite3_column_count(stmt: number): number;
   sqlite3_reset(stmt: number): number;
   sqlite3_clear_bindings(stmt: number): number;
   sqlite3_value_blob(value: number): number;

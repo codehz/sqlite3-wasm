@@ -99,42 +99,27 @@ export class DB {
   }
 }
 
-export type RawValue = number | string | Uint8Array | null;
+export type Value = number | string | Uint8Array | null;
 
-export class Value {
-  #handle: number;
-  #type: number;
-  constructor(handle: number) {
-    this.#handle = handle;
-    this.#type = sqlite3.sqlite3_value_type(handle);
-  }
-
-  get() {
-    switch (this.#type) {
-      case 1:
-      case 2:
-        return sqlite3.sqlite3_value_double(this.#handle);
-      case 3: {
-        const length = sqlite3.sqlite3_value_bytes(this.#handle);
-        return str(sqlite3.sqlite3_value_text(this.#handle), length);
-      }
-      case 4: {
-        const length = sqlite3.sqlite3_value_bytes(this.#handle);
-        return u8slice(sqlite3.sqlite3_value_text(this.#handle), length);
-      }
-      case 5:
-        return null;
-      default:
-        throw new TypeError(`invalid datetype: ${this.#type}`);
+function dumpValue(handle: number): Value {
+  const type = sqlite3.sqlite3_value_type(handle);
+  switch (type) {
+    case 1:
+    case 2:
+      return sqlite3.sqlite3_value_double(handle);
+    case 3: {
+      const length = sqlite3.sqlite3_value_bytes(handle);
+      console.log(sqlite3.sqlite3_value_text(handle));
+      return str(sqlite3.sqlite3_value_text(handle), length);
     }
-  }
-
-  clone() {
-    return new Value(sqlite3.sqlite3_value_dup(this.#handle));
-  }
-
-  destroy() {
-    sqlite3.sqlite3_value_free(this.#handle);
+    case 4: {
+      const length = sqlite3.sqlite3_value_bytes(handle);
+      return u8slice(sqlite3.sqlite3_value_blob(handle), length);
+    }
+    case 5:
+      return null;
+    default:
+      throw new TypeError(`invalid datetype: ${type}`);
   }
 }
 
@@ -175,7 +160,98 @@ export class Session {
   }
 }
 
-export type Parameter = Record<string, RawValue> | RawValue[];
+export enum ChangeSetOperation {
+  unknown,
+  insert,
+  delete,
+  update,
+}
+
+export class ChangeSetDescriptor {
+  table: string;
+  operation = ChangeSetOperation.unknown;
+  indirect: boolean;
+  old?: Value[];
+  new?: Value[];
+
+  static #capture(
+    handle: number,
+    count: number,
+    method: (iterator: number, column: number) => number,
+  ) {
+    const ret: Value[] = [];
+    for (let i = 0; i < count; i++) {
+      const value = method(handle, i);
+      throwIfError();
+      ret.push(dumpValue(value));
+    }
+    return ret;
+  }
+  constructor(handle: number) {
+    const nameref = sqlite3.helper_changeset_op(handle);
+    throwIfError();
+    this.table = str(nameref);
+    const [column, operation, indirect] = swap();
+    switch (operation) {
+      case 18:
+        this.operation = ChangeSetOperation.insert;
+        break;
+      case 9:
+        this.operation = ChangeSetOperation.delete;
+        break;
+      case 23:
+        this.operation = ChangeSetOperation.update;
+        break;
+    }
+    this.indirect = !!indirect;
+    if (
+      [ChangeSetOperation.delete, ChangeSetOperation.update].includes(
+        this.operation,
+      )
+    ) {
+      this.old = ChangeSetDescriptor.#capture(
+        handle,
+        column,
+        sqlite3.helper_changeset_old,
+      );
+    }
+    if (
+      [ChangeSetOperation.insert, ChangeSetOperation.update].includes(
+        this.operation,
+      )
+    ) {
+      this.new = ChangeSetDescriptor.#capture(
+        handle,
+        column,
+        sqlite3.helper_changeset_new,
+      );
+    }
+  }
+
+  static *dump(data: Uint8Array) {
+    const handle = bytesHelper(
+      data,
+      (ptr) => sqlite3.helper_changeset_start(ptr, data.length),
+    );
+    throwIfError();
+    try {
+      while (true) {
+        const op = sqlite3.sqlite3changeset_next(handle);
+        if (op === 100) {
+          yield new ChangeSetDescriptor(handle);
+        } else if (op === 101) {
+          return;
+        } else {
+          throw new SqliteError(op);
+        }
+      }
+    } finally {
+      sqlite3.sqlite3changeset_finalize(handle);
+    }
+  }
+}
+
+export type Parameter = Record<string, Value> | Value[];
 
 export class Statement {
   #handle: number;
@@ -202,7 +278,7 @@ export class Statement {
 
   bind(
     idxOrName: number | string,
-    value: RawValue,
+    value: Value,
   ): void {
     const idx = typeof idxOrName == "number"
       ? idxOrName
@@ -229,34 +305,17 @@ export class Statement {
     }
   }
 
-  get(idx: number): RawValue {
+  get(idx: number): Value {
     if (idx < 0 && idx >= this.#results.length) {
       throw new RangeError("column out of range");
     }
-    const datatype = sqlite3.sqlite3_column_type(this.#handle, idx);
-    switch (datatype) {
-      case 1:
-      case 2:
-        return sqlite3.sqlite3_column_double(this.#handle, idx);
-      case 3: {
-        const length = sqlite3.sqlite3_column_bytes(this.#handle, idx);
-        return str(sqlite3.sqlite3_column_text(this.#handle, idx), length);
-      }
-      case 4: {
-        const length = sqlite3.sqlite3_column_bytes(this.#handle, idx);
-        return u8slice(sqlite3.sqlite3_column_text(this.#handle, idx), length);
-      }
-      case 5:
-        return null;
-      default:
-        throw new TypeError(`invalid datetype: ${datatype}`);
-    }
+    return dumpValue(sqlite3.sqlite3_column_value(this.#handle, idx));
   }
 
-  getObject(): Record<string | number, RawValue> {
-    const ret: Record<string | number, RawValue> = [] as unknown as Record<
+  getObject(): Record<string | number, Value> {
+    const ret: Record<string | number, Value> = [] as unknown as Record<
       string | number,
-      RawValue
+      Value
     >;
     for (let i = 0; i < this.#results.length; i++) {
       const value = this.get(i);
@@ -278,7 +337,7 @@ export class Statement {
     }
   }
 
-  *query(obj: Parameter = {}): Iterable<Record<string | number, RawValue>> {
+  *query(obj: Parameter = {}): Iterable<Record<string | number, Value>> {
     try {
       this.bindAll(obj);
       while (true) {

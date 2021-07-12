@@ -1,4 +1,4 @@
-import { DB } from "./mod.ts";
+import { DB, ChangeSetDescriptor } from "./mod.ts";
 
 const db = new DB("test.db");
 db.exec("DROP TABLE IF EXISTS t");
@@ -11,5 +11,5 @@ for (const item of stmt.query({})) {
 }
 stmt.destroy();
 const set = session.changeset()
-console.log(set);
+console.log(...ChangeSetDescriptor.dump(set));
 session.destroy();
