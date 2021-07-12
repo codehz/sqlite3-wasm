@@ -221,7 +221,7 @@ function dumpValue(handle: number): Value {
     }
     case 4: {
       const length = sqlite3.sqlite3_value_bytes(handle);
-      return u8slice(sqlite3.sqlite3_value_blob(handle), length);
+      return u8slice(sqlite3.sqlite3_value_blob(handle), length).slice(0);
     }
     case 5:
       return null;
