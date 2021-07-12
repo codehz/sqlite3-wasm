@@ -37,6 +37,14 @@ export function tocstr2(text: string): [number, number] {
   u8slice(addr, buf.length).set(buf);
   return [addr, buf.length];
 }
+
+export interface SessionCallback {
+  filter(name: number): number;
+  conflict(kind: number, iter: number): number;
+}
+
+export const sessionCallbacks = new Map<number, SessionCallback>();
+
 const mod = await WebAssembly.instantiate(file, {
   host: {
     console_log(buffer: number, length: number) {
@@ -86,12 +94,12 @@ const mod = await WebAssembly.instantiate(file, {
   },
   session: {
     session_filter(ctx: number, name: number): number {
-      return 0;
+      return sessionCallbacks.get(ctx)!.filter(name);
     },
     session_conflict(ctx: number, kind: number, iter: number): number {
-      return 0;
-    }
-  }
+      return sessionCallbacks.get(ctx)!.conflict(kind, iter);
+    },
+  },
 });
 
 interface SQLite3Library {

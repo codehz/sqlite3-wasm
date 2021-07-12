@@ -1,5 +1,6 @@
 import sqlite3, {
   dupe,
+  sessionCallbacks,
   str,
   tocstr,
   tocstr2,
@@ -64,9 +65,99 @@ function throwIfError(code?: number) {
   }
 }
 
+export type HandleConflict = "omit" | "abort";
+export type HandleConflictReplace = HandleConflict | "replace";
+
+export interface ChangeSetApplyHelper {
+  filter?(name: string): boolean;
+  onDataChanged?(desc: ConflictChangeSetDescriptor): HandleConflictReplace;
+  onNotFound?(desc: ChangeSetDescriptor): HandleConflict;
+  onDuplicate?(desc: ConflictChangeSetDescriptor): HandleConflictReplace;
+  onForeignKey?(desc: ChangeSetDescriptor): HandleConflict;
+  onConstraint?(desc: ChangeSetDescriptor): HandleConflict;
+}
+
+function mapConflict(res: string): number {
+  switch (res) {
+    case "omit":
+      return 0;
+    case "replace":
+      return 1;
+    case "abort":
+      return 2;
+    default:
+      return 2;
+  }
+}
+
+function setSessionCallback(helper: ChangeSetApplyHelper) {
+  let key = 0;
+  while (sessionCallbacks.has(key)) key++;
+  sessionCallbacks.set(key, {
+    filter(name: number): number {
+      if (helper.filter) {
+        return +helper.filter(str(name));
+      } else {
+        return 1;
+      }
+    },
+    conflict(kind: number, iter: number) {
+      try {
+        switch (kind) {
+          case 1:
+            if (helper.onDataChanged) {
+              return mapConflict(
+                helper.onDataChanged(new ConflictChangeSetDescriptor(iter)),
+              );
+            } else {
+              return 2;
+            }
+          case 2:
+            if (helper.onNotFound) {
+              return mapConflict(
+                helper.onNotFound(new ChangeSetDescriptor(iter)),
+              );
+            } else {
+              return 2;
+            }
+          case 3:
+            if (helper.onDuplicate) {
+              return mapConflict(
+                helper.onDuplicate(new ConflictChangeSetDescriptor(iter)),
+              );
+            } else {
+              return 2;
+            }
+          case 4:
+            if (helper.onForeignKey) {
+              return mapConflict(
+                helper.onForeignKey(new ConflictChangeSetDescriptor(iter)),
+              );
+            } else {
+              return 2;
+            }
+          case 5:
+            if (helper.onConstraint) {
+              return mapConflict(
+                helper.onConstraint(new ConflictChangeSetDescriptor(iter)),
+              );
+            } else {
+              return 2;
+            }
+          default:
+            return 2;
+        }
+      } catch (e) {
+        console.error(e);
+        return 2;
+      }
+    },
+  });
+  return key;
+}
+
 export class DB {
   #handle: number;
-  #cache = new Map<string, Statement>();
   constructor(filename: string) {
     this.#handle = stringHelper(filename, sqlite3.helper_open);
     throwIfError();
@@ -92,6 +183,23 @@ export class DB {
     );
     throwIfError();
     return new Session(sess);
+  }
+
+  applyChangeSet(
+    data: Uint8Array,
+    helper: ChangeSetApplyHelper = {},
+  ) {
+    const id = setSessionCallback(helper);
+    try {
+      bytesHelper(
+        data,
+        (ptr) =>
+          sqlite3.helper_changeset_apply(this.#handle, ptr, data.length, id),
+      );
+      throwIfError();
+    } finally {
+      sessionCallbacks.delete(id);
+    }
   }
 
   destroy() {
@@ -159,21 +267,16 @@ export class Session {
   }
 }
 
-export enum ChangeSetOperation {
-  unknown,
-  insert,
-  delete,
-  update,
-}
+export type ChangeSetOperation = "unknown" | "insert" | "delete" | "update";
 
 export class ChangeSetDescriptor {
   table: string;
-  operation = ChangeSetOperation.unknown;
+  operation = "unknown";
   indirect: boolean;
   old?: Value[];
   new?: Value[];
 
-  static #capture(
+  protected static capture(
     handle: number,
     count: number,
     method: (iterator: number, column: number) => number,
@@ -193,33 +296,25 @@ export class ChangeSetDescriptor {
     const [column, operation, indirect] = swap();
     switch (operation) {
       case 18:
-        this.operation = ChangeSetOperation.insert;
+        this.operation = "insert";
         break;
       case 9:
-        this.operation = ChangeSetOperation.delete;
+        this.operation = "delete";
         break;
       case 23:
-        this.operation = ChangeSetOperation.update;
+        this.operation = "update";
         break;
     }
     this.indirect = !!indirect;
-    if (
-      [ChangeSetOperation.delete, ChangeSetOperation.update].includes(
-        this.operation,
-      )
-    ) {
-      this.old = ChangeSetDescriptor.#capture(
+    if (["delete", "update"].includes(this.operation)) {
+      this.old = ChangeSetDescriptor.capture(
         handle,
         column,
         sqlite3.helper_changeset_old,
       );
     }
-    if (
-      [ChangeSetOperation.insert, ChangeSetOperation.update].includes(
-        this.operation,
-      )
-    ) {
-      this.new = ChangeSetDescriptor.#capture(
+    if (["insert", "update"].includes(this.operation)) {
+      this.new = ChangeSetDescriptor.capture(
         handle,
         column,
         sqlite3.helper_changeset_new,
@@ -247,6 +342,19 @@ export class ChangeSetDescriptor {
     } finally {
       sqlite3.sqlite3changeset_finalize(handle);
     }
+  }
+}
+
+export class ConflictChangeSetDescriptor extends ChangeSetDescriptor {
+  conflicts: Value[];
+  constructor(handle: number) {
+    super(handle);
+    const [column] = swap();
+    this.conflicts = ConflictChangeSetDescriptor.capture(
+      handle,
+      column,
+      sqlite3.helper_changeset_conflict,
+    );
   }
 }
 
