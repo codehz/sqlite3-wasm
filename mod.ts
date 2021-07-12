@@ -251,15 +251,23 @@ export class Session {
   changeset() {
     const addr = sqlite3.helper_session_changeset(this.#handle);
     throwIfError();
-    const len = swap()[0];
-    return u8slice(addr, len);
+    try {
+      const len = swap()[0];
+      return u8slice(addr, len).slice(0);
+    } finally {
+      sqlite3.free(addr);
+    }
   }
 
   patchset() {
     const addr = sqlite3.helper_session_patchset(this.#handle);
     throwIfError();
-    const len = swap()[0];
-    return u8slice(addr, len);
+    try {
+      const len = swap()[0];
+      return u8slice(addr, len).slice(0);
+    } finally {
+      sqlite3.free(addr);
+    }
   }
 
   destroy() {
