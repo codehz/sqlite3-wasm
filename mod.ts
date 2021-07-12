@@ -105,50 +105,22 @@ function setSessionCallback(helper: ChangeSetApplyHelper) {
       }
     },
     conflict(kind: number, iter: number) {
+      const MAPS = [
+        [helper.onDataChanged, ConflictChangeSetDescriptor],
+        [helper.onNotFound, ChangeSetDescriptor],
+        [helper.onDuplicate, ConflictChangeSetDescriptor],
+        [helper.onForeignKey, ChangeSetDescriptor],
+        [helper.onConstraint, ChangeSetDescriptor],
+      ] as const;
+      const [method, clazz] = MAPS[kind - 1];
       try {
-        switch (kind) {
-          case 1:
-            if (helper.onDataChanged) {
-              return mapConflict(
-                helper.onDataChanged(new ConflictChangeSetDescriptor(iter)),
-              );
-            } else {
-              return 2;
-            }
-          case 2:
-            if (helper.onNotFound) {
-              return mapConflict(
-                helper.onNotFound(new ChangeSetDescriptor(iter)),
-              );
-            } else {
-              return 2;
-            }
-          case 3:
-            if (helper.onDuplicate) {
-              return mapConflict(
-                helper.onDuplicate(new ConflictChangeSetDescriptor(iter)),
-              );
-            } else {
-              return 2;
-            }
-          case 4:
-            if (helper.onForeignKey) {
-              return mapConflict(
-                helper.onForeignKey(new ConflictChangeSetDescriptor(iter)),
-              );
-            } else {
-              return 2;
-            }
-          case 5:
-            if (helper.onConstraint) {
-              return mapConflict(
-                helper.onConstraint(new ConflictChangeSetDescriptor(iter)),
-              );
-            } else {
-              return 2;
-            }
-          default:
-            return 2;
+        if (method) {
+          return mapConflict(
+            // deno-lint-ignore no-explicit-any
+            method.call(helper, new clazz(iter) as any),
+          );
+        } else {
+          return 2;
         }
       } catch (e) {
         console.error(e);

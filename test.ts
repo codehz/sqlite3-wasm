@@ -12,8 +12,12 @@ for (const item of stmt.query({})) {
 const set = session.changeset();
 console.log(...ChangeSetDescriptor.dump(set));
 session.destroy();
-db.exec("DELETE FROM t");
-db.applyChangeSet(set);
+db.applyChangeSet(set, {
+  onDuplicate(desc) {
+    console.log("duplicate", desc);
+    return "omit";
+  }
+});
 for (const item of stmt.query({})) {
   console.log(item);
 }
