@@ -109,7 +109,6 @@ function dumpValue(handle: number): Value {
       return sqlite3.sqlite3_value_double(handle);
     case 3: {
       const length = sqlite3.sqlite3_value_bytes(handle);
-      console.log(sqlite3.sqlite3_value_text(handle));
       return str(sqlite3.sqlite3_value_text(handle), length);
     }
     case 4: {

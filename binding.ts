@@ -58,7 +58,6 @@ const mod = await WebAssembly.instantiate(file, {
       return vfs.access(path, flags);
     },
     fs_open(filename: number, length: number, flags: number): number {
-      console.log("open");
       const path = str(filename, length);
       return vfs.open(path, flags);
     },
