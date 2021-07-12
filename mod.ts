@@ -30,10 +30,13 @@ function stringHelper2<T>(
   }
 }
 
-function bytesHelper<T>(bytes: Uint8Array, callback: (ptr: number) => T): T {
+function bytesHelper<T>(
+  bytes: Uint8Array,
+  callback: (ptr: number, len: number) => T,
+): T {
   const temp = dupe(bytes);
   try {
-    return callback(temp);
+    return callback(temp, bytes.length);
   } finally {
     sqlite3.free(temp);
   }
@@ -193,8 +196,8 @@ export class DB {
     try {
       bytesHelper(
         data,
-        (ptr) =>
-          sqlite3.helper_changeset_apply(this.#handle, ptr, data.length, id),
+        (ptr, len) =>
+          sqlite3.helper_changeset_apply(this.#handle, ptr, len, id),
       );
       throwIfError();
     } finally {
@@ -333,7 +336,7 @@ export class ChangeSetDescriptor {
   static *dump(data: Uint8Array) {
     const handle = bytesHelper(
       data,
-      (ptr) => sqlite3.helper_changeset_start(ptr, data.length),
+      sqlite3.helper_changeset_start,
     );
     throwIfError();
     try {
@@ -391,10 +394,7 @@ export class Statement {
     return sqlite3.sqlite3_step(this.#handle);
   }
 
-  bind(
-    idxOrName: number | string,
-    value: Value,
-  ): void {
+  bind(idxOrName: number | string, value: Value): void {
     const idx = typeof idxOrName == "number"
       ? idxOrName
       : this.#params[idxOrName];
@@ -406,7 +406,7 @@ export class Statement {
     } else if (value instanceof Uint8Array) {
       bytesHelper(
         value,
-        (ptr) => sqlite3.helper_bind_blob(this.#handle, idx, ptr, value.length),
+        (ptr, len) => sqlite3.helper_bind_blob(this.#handle, idx, ptr, len),
       );
       throwIfError();
     } else if (typeof value === "string") {
@@ -428,10 +428,7 @@ export class Statement {
   }
 
   getObject(): Record<string | number, Value> {
-    const ret: Record<string | number, Value> = [] as unknown as Record<
-      string | number,
-      Value
-    >;
+    const ret = [] as unknown as Record<string | number, Value>;
     for (let i = 0; i < this.#results.length; i++) {
       const value = this.get(i);
       ret[i] = value;
