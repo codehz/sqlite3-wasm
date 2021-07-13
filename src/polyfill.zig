@@ -117,7 +117,7 @@ export fn trunc(input: f64) f64 {
 }
 
 export fn exp(input: f64) f64 {
-    return @exp(input);
+    return std.math.exp(input);
 }
 
 export fn pow(base: f64, exponent: f64) f64 {
