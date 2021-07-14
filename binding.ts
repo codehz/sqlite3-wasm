@@ -56,7 +56,7 @@ const mod = await WebAssembly.instantiate(file, {
       console.error(content);
     },
     get_time(): number {
-      return +new Date();
+      return +new Date() / 86400000 + 2440587.5;
     },
     fill_random(buffer: number, size: number) {
       crypto.getRandomValues(u8slice(buffer, size));
