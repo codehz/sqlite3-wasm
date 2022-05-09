@@ -12,7 +12,7 @@ const IoMethods = extern struct {
     x_lock: fn (self: *File, flag: c_int) callconv(.C) c_int,
     x_unlock: fn (self: *File, flag: c_int) callconv(.C) c_int,
     x_check_reserved_lock: fn (self: *File, p_result: *c_int) callconv(.C) c_int,
-    x_control: fn (self: *File, op: c_int, arg: *c_void) callconv(.C) c_int,
+    x_control: fn (self: *File, op: c_int, arg: *anyopaque) callconv(.C) c_int,
     x_sector_size: fn (self: *File) callconv(.C) c_int,
     x_device_characteristics: fn (self: *File) callconv(.C) c_int,
 };
@@ -66,7 +66,7 @@ fn vfs_file_dummy_check(self: *File, p_result: *c_int) callconv(.C) c_int {
     return 0;
 }
 
-fn vfs_file_control(self: *File, op: c_int, arg: *c_void) callconv(.C) c_int {
+fn vfs_file_control(self: *File, op: c_int, arg: *anyopaque) callconv(.C) c_int {
     _ = self;
     _ = op;
     _ = arg;
@@ -106,7 +106,7 @@ const VFS = extern struct {
     max_pathname: c_int,
     next: usize = 0,
     name: [*:0]const u8,
-    appdata: ?*c_void,
+    appdata: ?*anyopaque,
     x_open: fn (self: *Self, name: [*:0]const u8, file: *File, flags: c_int, out_flags: *c_int) callconv(.C) c_int,
     x_delete: fn (self: *Self, name: [*:0]const u8, sync_dir: c_int) callconv(.C) c_int,
     x_access: fn (self: *Self, name: [*:0]const u8, flags: c_int, out_flags: *c_int) callconv(.C) c_int,

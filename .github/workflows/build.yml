@@ -7,7 +7,7 @@ jobs:
     steps:
       - uses: goto-bus-stop/setup-zig@v1
         with:
-          version: 0.9.0-dev.440+7b8a968f1
+          version: 0.9.1
       - uses: actions/checkout@v2
       - name: 'Download sqlite3 source'
         run: |

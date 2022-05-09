@@ -4,6 +4,7 @@ const wasm = @import("./wasm.zig");
 pub fn init() void {}
 
 var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+var allocator = gpa.allocator();
 const pointersize = @sizeOf(usize);
 
 export fn strcmp(a: [*:0]const u8, b: [*:0]const u8) c_int {
@@ -16,7 +17,7 @@ export fn memcpy(dest: [*]u8, src: [*]const u8, len: usize) [*]u8 {
 }
 
 export fn strlen(src: [*:0]u8) usize {
-    return std.mem.lenZ(src);
+    return std.mem.len(src);
 }
 
 export fn memset(ptr: [*]u8, c: u8, byte_count: usize) [*]u8 {
@@ -61,23 +62,23 @@ export fn strrchr(src: [*:0]const u8, char: u8) ?[*:0]const u8 {
     return @intToPtr(?[*:0]const u8, @ptrToInt(src) + pos);
 }
 
-pub export fn malloc(size: usize) ?*c_void {
-    const ret = gpa.allocator.alloc(u8, size + pointersize) catch return null;
+pub export fn malloc(size: usize) ?*anyopaque {
+    const ret = allocator.alloc(u8, size + pointersize) catch return null;
     const ptr = @ptrToInt(ret.ptr);
     @intToPtr(*usize, ptr).* = size;
-    return @intToPtr(*c_void, ptr + pointersize);
+    return @intToPtr(*anyopaque, ptr + pointersize);
 }
 
-pub export fn free(ptr: ?*c_void) void {
+pub export fn free(ptr: ?*anyopaque) void {
     if (ptr == null) {
         return;
     }
     const addr = @ptrToInt(ptr) - pointersize;
     const len = @intToPtr(*usize, addr).*;
-    gpa.allocator.free(@intToPtr([*]u8, addr)[0..len]);
+    allocator.free(@intToPtr([*]u8, addr)[0..len]);
 }
 
-pub export fn malloc_usable_size(ptr: ?*c_void) usize {
+pub export fn malloc_usable_size(ptr: ?*anyopaque) usize {
     if (ptr == null) {
         return 0;
     }
@@ -85,13 +86,13 @@ pub export fn malloc_usable_size(ptr: ?*c_void) usize {
     return @intToPtr(*usize, addr).*;
 }
 
-inline fn toRawPtr(ptr: []u8) *c_void {
+inline fn toRawPtr(ptr: []u8) *anyopaque {
     const addr = @ptrToInt(ptr.ptr);
     @intToPtr(*usize, addr).* = ptr.len - pointersize;
-    return @intToPtr(*c_void, addr + pointersize);
+    return @intToPtr(*anyopaque, addr + pointersize);
 }
 
-pub export fn realloc(ptr: ?*c_void, size: usize) ?*c_void {
+pub export fn realloc(ptr: ?*anyopaque, size: usize) ?*anyopaque {
     if (ptr == null) {
         return null;
     }
@@ -99,13 +100,13 @@ pub export fn realloc(ptr: ?*c_void, size: usize) ?*c_void {
     const old_size = @intToPtr(*usize, addr).*;
     const orig = @intToPtr([*]u8, addr)[0 .. old_size + pointersize];
     if (old_size > size) {
-        return toRawPtr(gpa.allocator.shrink(orig, size + pointersize));
+        return toRawPtr(allocator.shrink(orig, size + pointersize));
     } else {
-        if (gpa.allocator.resize(orig, size + pointersize)) |ret| {
+        if (allocator.resize(orig, size + pointersize)) |ret| {
             return toRawPtr(ret);
-        } else |_| {
-            defer gpa.allocator.free(orig);
-            const ret = gpa.allocator.alloc(u8, size + pointersize) catch return null;
+        } else {
+            defer allocator.free(orig);
+            const ret = allocator.alloc(u8, size + pointersize) catch return null;
             std.mem.copy(u8, ret[pointersize .. old_size + pointersize], orig[pointersize .. old_size + pointersize]);
             return toRawPtr(ret);
         }

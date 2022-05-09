@@ -1,1 +1,1 @@
-https://sqlite.org/2021/sqlite-amalgamation-3360000.zip
+https://sqlite.org/2022/sqlite-amalgamation-3380500.zip

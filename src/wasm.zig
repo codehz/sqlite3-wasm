@@ -51,4 +51,4 @@ pub extern "host" fn fs_truncate(fd: FileDescriptor, length: usize) void;
 pub extern "host" fn fs_filesize(fd: FileDescriptor) usize;
 
 pub extern "session" fn session_filter(ctx: usize, name: [*:0]const u8) c_int;
-pub extern "session" fn session_conflict(ctx: usize, kind: c_int, iter: *c_void) c_int;
+pub extern "session" fn session_conflict(ctx: usize, kind: c_int, iter: *anyopaque) c_int;

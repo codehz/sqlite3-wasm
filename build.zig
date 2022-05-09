@@ -1,9 +1,9 @@
 const std = @import("std");
 
 fn setArguments(step: *std.build.LibExeObjStep, args: []const u8) void {
-    var iter = std.mem.split(args, "\n");
+    var iter = std.mem.split(u8, args, "\n");
     while (iter.next()) |line| {
-        var eq = std.mem.split(line, "=");
+        var eq = std.mem.split(u8, line, "=");
         const key = eq.next() orelse unreachable;
         const value = eq.next();
         step.defineCMacro(key[2..], value);
